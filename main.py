@@ -9,6 +9,7 @@ from tqdm import tqdm
 parser = argparse.ArgumentParser()
 parser.add_argument("url", help='The url of the thread.')
 parser.add_argument("--watch", action='store_true', help='Watch for new posts and download them.')
+parser.add_argument("--nvidia", action='store_true', help='Use nvenc.')
 args = parser.parse_args()
 
 #TODO make these arguments, need to change the ffmpeg stuff for the format
@@ -48,6 +49,8 @@ class Chan:
         data = requests.get(self.api).json()
         data = data[list(data)[0]]
         errors = []
+        enc = 'libx264' if not args.nvidia else 'h264_nvenc'
+
         for p in tqdm(data['posts'].values()):
             if p['media'] is None:
                 continue
@@ -59,22 +62,23 @@ class Chan:
                 try:
                     if not os.path.isfile(os.path.join(OUT_PATH, f'{fname}.{OUT_FORMAT}')):
                         sound_tmp = os.path.join(TMP_PATH, fname+'_s.'+surl.split('.')[-1])
-                        pic_temp = os.path.join(TMP_PATH, fname+'._p'+name.split('.')[-1])
+                        pic_temp = os.path.join(TMP_PATH, fname+'_p.'+name.split('.')[-1])
                         with open(sound_tmp, 'wb') as sound, open(pic_temp, 'wb') as pic:
                             surl = 'https://' + surl if not surl.startswith('http') else surl
                             sound.write(requests.get(urllib.parse.unquote(surl)).content)
                             pic.write(requests.get(p['media']['media_link']).content)
+
                         if name.split('.')[-1] == 'webm':
                             subprocess.run(['ffmpeg', '-stream_loop', '-1', '-i', f'{pic_temp}', '-i', f'{sound_tmp}',
-                                            '-strict' , '-2', '-c:v', 'libx264', '-c:a', 'copy', '-shortest',
+                                            '-strict' , '-2', '-c:v', enc, '-c:a', 'copy', '-shortest',
                                             os.path.join(OUT_PATH, f'{fname}.{OUT_FORMAT}')])
                         elif name.split('.')[-1] == 'gif':
                             subprocess.run(['ffmpeg', '-ignore_loop', '0', '-i', f'{pic_temp}', '-i', f'{sound_tmp}',
-                                            '-strict' , '-2', '-c:v', 'libx264', '-c:a', 'copy', '-shortest',
+                                            '-strict' , '-2', '-c:v', enc, '-c:a', 'copy', '-shortest',
                                             os.path.join(OUT_PATH, f'{fname}.{OUT_FORMAT}')])
                         else:
                             subprocess.run(['ffmpeg', '-loop', '0', '-i', f'{pic_temp}', '-i', f'{sound_tmp}',
-                                            '-strict', '-2', '-c:v', 'vp9', '-c:a', 'copy',
+                                            '-strict', '-2', '-c:v', enc, '-vcodec', 'mpeg4', '-c:a', 'copy',
                                             os.path.join(OUT_PATH, f'{fname}.{OUT_FORMAT}')])
                 except BaseException:
                     errors.append(p["num"])
